@@ -3,19 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>청각장애인 스마트워치 앱 WBS 대시보드 (Public Access)</title>
+    <title>청각장애인 스마트워치 앱 WBS 대시보드 (Firebase Sync)</title>
     
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
+    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
+    <!-- html2canvas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
+    <!-- Firebase SDK (Compat Version for UMD) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -29,16 +36,15 @@
             .bg-gray-50 { background-color: white !important; }
         }
         
-        /* 리스트 뷰 컬럼 너비 */
         .col-task { width: 35%; }
         .col-assignee { width: 15%; }
         .col-period { width: 15%; }
         .col-dod { width: 15%; }
         .col-status { width: 10%; }
-        .col-last-mod { width: 10%; } 
+        .col-last-mod { width: 10%; } /* 추가된 컬럼 */
 
         /* 간트 차트 상태별 패턴 */
-        .gantt-bar-done { background-color: #22c55e; } 
+        .gantt-bar-done { background-color: #22c55e; } /* solid green */
         .gantt-bar-progress { 
             background: repeating-linear-gradient(
                 45deg,
@@ -56,6 +62,8 @@
 
     <script type="text/babel">
         // --- Firebase 설정 (사용자 설정 필요) ---
+        // 주의: 이곳에 실제 Firebase 프로젝트 설정을 입력해야 동기화가 작동합니다.
+        // 현재는 더미 값이므로 실행 시 오류가 발생하며 데모 모드로 동작합니다.
         const firebaseConfig = {
             apiKey: "YOUR_API_KEY",
             authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -66,10 +74,25 @@
         };
 
         // Firebase 초기화
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
+        let db = null;
+        let auth = null;
+        let isFirebaseInitialized = false;
+
+        try {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            // Config가 더미인지 확인 (간단한 체크)
+            if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+                db = firebase.firestore();
+                auth = firebase.auth();
+                isFirebaseInitialized = true;
+            } else {
+                console.warn("Firebase Config가 설정되지 않았습니다. 데모 모드로 실행합니다.");
+            }
+        } catch (e) {
+            console.error("Firebase Initialization Error:", e);
         }
-        const db = firebase.firestore();
 
         const { useState, useMemo, useRef, useEffect } = React;
 
@@ -91,9 +114,9 @@
             Download: (p) => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />,
             Printer: (p) => <Icon {...p} path={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></>} />,
             Filter: (p) => <Icon {...p} path={<><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></>} />,
-            Refresh: (p) => <Icon {...p} path={<><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>} />,
-            Globe: (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></>} />,
-            Save: (p) => <Icon {...p} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} />
+            Google: (p) => <Icon {...p} path={<><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-5v-2h3.26c-.34-1.63-1.78-2.85-3.26-2.85-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5c1.47 0 2.75-.91 3.25-2.15h2.06c-.63 2.37-2.79 4.15-5.31 4.15C8.14 20 5 16.86 5 13s3.14-8 8-8c2.06 0 3.93.79 5.35 2.08l-2.83 2.83C14.86 9.39 13.51 9 12 9c-2.21 0-4 1.79-4 4s1.79 4 4 4c1.86 0 3.41-1.28 3.86-3h-1.86v-2z"/></>} />,
+            Lock: (p) => <Icon {...p} path={<><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>} />,
+            Refresh: (p) => <Icon {...p} path={<><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>} />
         };
 
         const PHASES = [
@@ -128,11 +151,11 @@
             { id: '20', phase: 'p3', task: '[행정] 공모 서류 체크리스트 & 원가 의뢰', assignee: { display: 'Admin/PM', roles: ['Admin', 'PM'] }, start: '2026-02-03', end: '2026-02-07', status: 'Todo', dod: '제출 리스트, 견적요청' },
             { id: '21', phase: 'p3', task: '[마케팅] 제안서/제품사양서/소개서 작성', assignee: { display: 'Mkt/Plan', roles: ['Mkt', 'Plan'] }, start: '2026-02-10', end: '2026-02-28', status: 'Todo', dod: '제안서, 카탈로그' },
             { id: '22', phase: 'p3', task: '[행정/PM] 평가 대응 Q&A 리스트 (심사위원용)', assignee: { display: 'PM/Mkt', roles: ['PM', 'Mkt'] }, start: '2026-02-15', end: '2026-02-25', status: 'Todo', dod: 'Q&A 20문 1장' },
-            { id: '23', phase: 'p3', task: '[개발] 스토어 배포 & 심사 대응 (반려대비)', assignee: { display: 'Dev', roles: ['Dev'] }, start: '2026-02-15', end: '2026-02-28', status: 'Todo', dod: '심사 통과/소명자료' },
-            { id: '24', phase: 'p3', task: '[행정] 원가계산 수령 or 약정서(플랜B)', assignee: { display: 'Admin', roles: ['Admin'] }, start: '2026-02-20', end: '2026-02-28', status: 'Todo', dod: '원가분석서/약정서' },
-            { id: '25', phase: 'p3', task: '[행정] 제출 패키지 제작(제본/USB/인감)', assignee: { display: 'Admin', roles: ['Admin'] }, start: '2026-02-24', end: '2026-03-02', status: 'Todo', dod: '제출 패키지 완본' },
-            { id: '26', phase: 'p4', task: '[마케팅] 평가 리허설 (데모/Q&A/정합성)', assignee: { display: 'Mkt/PM', roles: ['Mkt', 'PM'] }, start: '2026-03-01', end: '2026-03-03', status: 'Todo', dod: '리허설 완료' },
-            { id: '27', phase: 'p4', task: '[행정] 최종 현장 접수 (대리인 위임장)', assignee: { display: 'Admin', roles: ['Admin'] }, start: '2026-03-04', end: '2026-03-07', status: 'Todo', dod: '접수증 (15:00 마감)' },
+            { id: 23, phase: 'p3', task: '[개발] 스토어 배포 & 심사 대응 (반려대비)', assignee: { display: 'Dev', roles: ['Dev'] }, start: '2026-02-15', end: '2026-02-28', status: 'Todo', dod: '심사 통과/소명자료' },
+            { id: 24, phase: 'p3', task: '[행정] 원가계산 수령 or 약정서(플랜B)', assignee: { display: 'Admin', roles: ['Admin'] }, start: '2026-02-20', end: '2026-02-28', status: 'Todo', dod: '원가분석서/약정서' },
+            { id: 25, phase: 'p3', task: '[행정] 제출 패키지 제작(제본/USB/인감)', assignee: { display: 'Admin', roles: ['Admin'] }, start: '2026-02-24', end: '2026-03-02', status: 'Todo', dod: '제출 패키지 완본' },
+            { id: 26, phase: 'p4', task: '[마케팅] 평가 리허설 (데모/Q&A/정합성)', assignee: { display: 'Mkt/PM', roles: ['Mkt', 'PM'] }, start: '2026-03-01', end: '2026-03-03', status: 'Todo', dod: '리허설 완료' },
+            { id: 27, phase: 'p4', task: '[행정] 최종 현장 접수 (대리인 위임장)', assignee: { display: 'Admin', roles: ['Admin'] }, start: '2026-03-04', end: '2026-03-07', status: 'Todo', dod: '접수증 (15:00 마감)' },
         ];
 
         // --- 유틸리티 ---
@@ -159,57 +182,65 @@
         // --- 메인 컴포넌트 ---
         function ProjectDashboard() {
             const [viewMode, setViewMode] = useState('list');
-            const [tasks, setTasks] = useState([]); 
+            const [tasks, setTasks] = useState([]); // 초기값 빈 배열, Firestore 로드
+            const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
-            const [updatingId, setUpdatingId] = useState(null); // 저장 중인 항목 ID
+            const [demoMode, setDemoMode] = useState(false); // 데모 모드 상태
             const dashboardRef = useRef(null);
 
-            // [필터 State] - 초기값을 로컬 스토리지에서 불러옴
-            const [statusFilter, setStatusFilter] = useState(() => {
-                const saved = localStorage.getItem('statusFilter');
-                return saved ? JSON.parse(saved) : { 'Todo': true, 'In Progress': true, 'Done': true };
-            });
-            const [assigneeFilter, setAssigneeFilter] = useState(() => {
-                const saved = localStorage.getItem('assigneeFilter');
-                return saved ? JSON.parse(saved) : {};
-            });
+            // [필터 State]
+            const [statusFilter, setStatusFilter] = useState({ 'Todo': true, 'In Progress': true, 'Done': true });
+            const [assigneeFilter, setAssigneeFilter] = useState({});
 
-            // 필터가 변경될 때마다 로컬 스토리지에 저장
+            // 1. Auth Listener
             useEffect(() => {
-                localStorage.setItem('statusFilter', JSON.stringify(statusFilter));
-            }, [statusFilter]);
-
-            useEffect(() => {
-                if (Object.keys(assigneeFilter).length > 0) {
-                    localStorage.setItem('assigneeFilter', JSON.stringify(assigneeFilter));
+                if (!isFirebaseInitialized) {
+                    setLoading(false);
+                    setDemoMode(true);
+                    setTasks(INITIAL_TASKS);
+                    return;
                 }
-            }, [assigneeFilter]);
-
-
-            // 1. Firestore Subscribe (Realtime)
-            useEffect(() => {
-                const unsubscribe = db.collection('tasks').orderBy('start').onSnapshot(snapshot => {
-                    const loadedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
-                    if (loadedTasks.length === 0) {
-                        setTasks(INITIAL_TASKS); 
-                    } else {
-                        setTasks(loadedTasks);
-                    }
-                    setLoading(false);
-                }, (error) => {
-                    console.error("Firestore Error:", error);
-                    if(error.code === 'permission-denied') {
-                        alert("권한 오류: Firebase Console에서 'Rules'를 'allow read, write: if true;'로 변경해야 누구나 볼 수 있습니다.");
-                    } else {
-                        alert("데이터 로드 실패: Firebase 설정을 확인해주세요.");
-                    }
-                    setLoading(false);
+                const unsubscribe = auth.onAuthStateChanged((u) => {
+                    setUser(u);
                 });
                 return () => unsubscribe();
             }, []);
 
-            // 담당자 목록 추출
+            // 2. Firestore Subscribe (Realtime)
+            useEffect(() => {
+                if (!isFirebaseInitialized) {
+                    // Firebase 초기화 실패 시 바로 종료
+                    return;
+                }
+                
+                try {
+                    const unsubscribe = db.collection('tasks').orderBy('start').onSnapshot(snapshot => {
+                        const loadedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        
+                        // 만약 데이터가 아예 없으면 초기화 (Seed)
+                        if (loadedTasks.length === 0) {
+                            setTasks(INITIAL_TASKS); // 화면엔 일단 보여줌
+                            // DB 저장은 별도 함수로 (자동 저장은 위험할 수 있으니)
+                        } else {
+                            setTasks(loadedTasks);
+                        }
+                        setLoading(false);
+                    }, (error) => {
+                        console.warn("Firestore 연결 실패 (아마도 설정/권한 문제):", error.code);
+                        setDemoMode(true);
+                        setTasks(INITIAL_TASKS);
+                        setLoading(false);
+                    });
+                    return () => unsubscribe();
+                } catch (e) {
+                    console.error("Firestore Error:", e);
+                    setDemoMode(true);
+                    setTasks(INITIAL_TASKS);
+                    setLoading(false);
+                }
+            }, []);
+
+            // 담당자 목록 추출 (동적)
             const allAssignees = useMemo(() => {
                 const assignees = new Set();
                 tasks.forEach(t => {
@@ -220,25 +251,44 @@
                 return Array.from(assignees).sort();
             }, [tasks]);
 
-            // 필터 초기화 (데이터 로드 시, 로컬스토리지에 값이 없으면 전체 선택)
+            // 필터 초기화 (데이터 로드 시 한 번만)
             useEffect(() => {
                 if (allAssignees.length > 0 && Object.keys(assigneeFilter).length === 0) {
-                    // 저장된 게 없을 때만 초기화
-                    if(!localStorage.getItem('assigneeFilter')) {
-                        const initial = {};
-                        allAssignees.forEach(a => initial[a] = true);
-                        setAssigneeFilter(initial);
-                    }
+                    const initial = {};
+                    allAssignees.forEach(a => initial[a] = true);
+                    setAssigneeFilter(initial);
                 }
             }, [allAssignees]);
 
-            // [DB 초기화]
+            // [로그인/로그아웃]
+            const handleLogin = async () => {
+                if (demoMode) {
+                    alert("데모 모드에서는 로그인이 불가능합니다. Firebase 설정을 확인해주세요.");
+                    return;
+                }
+                const provider = new firebase.auth.GoogleAuthProvider();
+                try {
+                    await auth.signInWithPopup(provider);
+                } catch (error) {
+                    console.error("Login Failed:", error);
+                    alert("로그인 실패: " + error.message);
+                }
+            };
+            const handleLogout = () => auth.signOut();
+
+            // [DB 초기화 - 관리자용]
             const initializeDB = async () => {
-                if (!confirm("데이터베이스를 초기화하시겠습니까? (누락된 기본 태스크만 추가됩니다)")) return;
+                if (demoMode) {
+                    alert("데모 모드에서는 DB 초기화가 불가능합니다.");
+                    return;
+                }
+                if (!user) return alert("로그인이 필요합니다.");
+                if (!confirm("데이터베이스를 초기화하시겠습니까? 기존 데이터가 있다면 덮어쓰지 않고 누락된 것만 추가합니다.")) return;
 
                 const batch = db.batch();
                 INITIAL_TASKS.forEach(task => {
                     const docRef = db.collection('tasks').doc(task.id);
+                    // set with merge: true (없으면 생성, 있으면 유지)
                     batch.set(docRef, task, { merge: true }); 
                 });
                 
@@ -247,52 +297,59 @@
                     alert("초기화 완료!");
                 } catch (e) {
                     console.error(e);
-                    alert("초기화 실패 (Firebase Rules를 확인하세요)");
+                    alert("초기화 실패");
                 }
             };
 
-            // [상태 업데이트 - 저장 표시 기능 추가]
+            // [상태 업데이트]
             const updateStatus = async (id, newStatus) => {
+                if (demoMode) {
+                    alert("데모 모드입니다. 변경 사항이 저장되지 않습니다.");
+                    // 로컬 반영 (UI 테스트용)
+                    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+                    return;
+                }
+
+                if (!user) {
+                    alert("상태를 변경하려면 로그인이 필요합니다.");
+                    return;
+                }
+
                 const task = tasks.find(t => t.id === id);
                 if (!task || task.status === newStatus) return;
 
                 const oldStatus = task.status;
                 const now = firebase.firestore.FieldValue.serverTimestamp();
-                
-                setUpdatingId(id); // 저장 중 표시 시작
-
-                // 게스트 정보로 기록
-                const guestUser = {
-                    uid: 'guest',
-                    name: 'Guest User',
-                    email: ''
-                };
 
                 try {
                     // 1. Task Update
                     await db.collection('tasks').doc(id).update({
                         status: newStatus,
                         updatedAt: now,
-                        updatedBy: guestUser
+                        updatedBy: {
+                            uid: user.uid,
+                            name: user.displayName,
+                            email: user.email
+                        }
                     });
 
-                    // 2. Audit Log
+                    // 2. Audit Log (별도 컬렉션)
                     await db.collection('task_audit_logs').add({
                         taskId: id,
                         taskName: task.task,
                         oldStatus: oldStatus,
                         newStatus: newStatus,
                         changedAt: now,
-                        changedBy: guestUser
+                        changedBy: {
+                            uid: user.uid,
+                            name: user.displayName,
+                            email: user.email
+                        }
                     });
-                    
-                    // 성공 시 별도 알림은 UX 방해되므로 생략 (자동 반영됨)
 
                 } catch (error) {
                     console.error("Update failed:", error);
-                    alert("저장 실패: Firebase Console의 Rules가 'public'으로 설정되어 있는지 확인하세요.");
-                } finally {
-                    setUpdatingId(null); // 저장 표시 종료
+                    alert("저장 실패: 권한이 없거나 네트워크 오류입니다.");
                 }
             };
 
@@ -305,14 +362,17 @@
                 setAssigneeFilter(next);
             };
 
+            // [필터링 로직]
             const filteredTasks = useMemo(() => {
                 return tasks.filter(task => {
                     if (!statusFilter[task.status]) return false;
+                    // 데이터 로드 전에는 assignee가 없을 수 있음
                     if (!task.assignee || !task.assignee.roles) return true;
                     return task.assignee.roles.some(role => assigneeFilter[role]);
                 });
             }, [tasks, statusFilter, assigneeFilter]);
 
+            // [진행률]
             const progress = useMemo(() => {
                 if (filteredTasks.length === 0) return 0;
                 const done = filteredTasks.filter(t => t.status === 'Done').length;
@@ -338,8 +398,10 @@
                     : { title: '완료', sub: '' };
             }, [tasks]);
 
+            // 날짜 표시용 유틸 (Timestamp -> String)
             const formatDate = (ts) => {
                 if (!ts) return '-';
+                // Firestore Timestamp
                 const date = ts.toDate ? ts.toDate() : new Date(ts); 
                 return `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
             };
@@ -363,7 +425,7 @@
 
             const handlePrint = () => { window.print(); };
 
-            if (loading) return <div className="min-h-screen flex items-center justify-center">Loading Public Data...</div>;
+            if (loading) return <div className="min-h-screen flex items-center justify-center">Loading Project Data...</div>;
 
             return (
                 <div className="min-h-screen bg-gray-50 p-6 font-sans text-gray-800" ref={dashboardRef}>
@@ -373,22 +435,29 @@
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-900 flex items-center">
                                     <Icons.Clock className="mr-2 text-indigo-600" />
-                                    청각장애인 워치앱 프로젝트 (Public)
+                                    청각장애인 워치앱 프로젝트 (Sync)
                                 </h1>
                                 <p className="text-sm text-gray-500 mt-1">
                                     <span className="font-bold text-indigo-600">Target: 3월 2일 (준비 완료)</span> | 접수마감: 3월 7일 15:00
                                 </p>
                             </div>
                             <div className="flex bg-white p-1 rounded-lg border shadow-sm no-print items-center">
-                                {/* 로그인 버튼 삭제됨 / 공용 모드 표시 */}
-                                <div className="flex items-center mr-3 px-3 py-1 bg-gray-100 text-gray-600 rounded-md text-xs font-medium border border-gray-200">
-                                    <Icons.Globe size={14} className="mr-1"/> Public Mode
-                                </div>
-
+                                {/* 로그인 버튼 */}
+                                {user ? (
+                                    <div className="flex items-center mr-3 px-3 py-1 bg-green-50 text-green-700 rounded-md text-xs font-medium border border-green-100">
+                                        <img src={user.photoURL} alt="User" className="w-5 h-5 rounded-full mr-2"/>
+                                        {user.displayName}
+                                        <button onClick={handleLogout} className="ml-2 text-gray-400 hover:text-red-500"><Icons.Lock size={12}/></button>
+                                    </div>
+                                ) : (
+                                    <button onClick={handleLogin} className="flex items-center mr-2 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-md">
+                                        <Icons.Google size={16} className="mr-2 text-red-500"/> 로그인
+                                    </button>
+                                )}
                                 <div className="w-px bg-gray-200 mx-1 h-6"></div>
 
-                                {/* DB 초기화 버튼 */}
-                                <button onClick={initializeDB} className="px-2 text-gray-300 hover:text-gray-500" title="데이터 초기화(복구)"><Icons.Refresh size={14}/></button>
+                                {/* DB 초기화 버튼 (데이터 없을 때만 노출하거나, 숨겨둠) */}
+                                {!demoMode && <button onClick={initializeDB} className="px-2 text-gray-300 hover:text-gray-500" title="DB 초기화(Admin Only)"><Icons.Refresh size={14}/></button>}
 
                                 <div className="w-px bg-gray-200 mx-1 h-6"></div>
                                 <button onClick={() => setViewMode('list')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center ${viewMode === 'list' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
@@ -407,12 +476,28 @@
                             </div>
                         </div>
 
+                        {/* 데모 모드 알림 */}
+                        {demoMode && (
+                            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                                <div className="flex">
+                                    <div className="flex-shrink-0">
+                                        <Icons.AlertCircle size={20} className="text-yellow-400"/>
+                                    </div>
+                                    <div className="ml-3">
+                                        <p className="text-sm text-yellow-700">
+                                            <span className="font-bold">데모 모드:</span> Firebase 설정이 올바르지 않아 로컬 데이터로 동작합니다. 데이터 변경사항은 저장되지 않습니다. (index.html 파일을 열어 firebaseConfig 값을 수정해주세요.)
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* 필터 영역 */}
                         <div className="bg-white p-4 rounded-xl border shadow-sm mb-6 no-print">
                             <div className="flex flex-col md:flex-row gap-6">
                                 <div className="flex-1">
                                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center">
-                                        <Icons.Filter size={12} className="mr-1"/> 상태 필터 (자동 저장됨)
+                                        <Icons.Filter size={12} className="mr-1"/> 상태 필터
                                     </h4>
                                     <div className="flex flex-wrap gap-3">
                                         {['Todo', 'In Progress', 'Done'].map(status => (
@@ -426,7 +511,7 @@
                                 <div className="flex-[2]">
                                     <div className="flex justify-between items-center mb-2">
                                         <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center">
-                                            <Icons.User size={12} className="mr-1"/> 담당자 필터 (자동 저장됨)
+                                            <Icons.User size={12} className="mr-1"/> 담당자 필터
                                         </h4>
                                         <div className="space-x-2 text-xs">
                                             <button onClick={() => toggleAllAssignees(true)} className="text-indigo-600 hover:underline">전체 선택</button>
@@ -507,19 +592,16 @@
                                                                 <td className="px-6 py-4 text-xs text-gray-500 truncate">{task.start.slice(5)} ~ {task.end.slice(5)}</td>
                                                                 <td className="px-6 py-4 text-xs text-gray-500 truncate" title={task.dod}>{task.dod}</td>
                                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <div className="flex items-center">
-                                                                        <select 
-                                                                            value={task.status} 
-                                                                            onChange={(e) => updateStatus(task.id, e.target.value)} 
-                                                                            disabled={updatingId === task.id}
-                                                                            className={`text-xs font-medium px-2.5 py-1 rounded-full border-0 cursor-pointer outline-none ring-1 ring-inset ${getStatusColor(task.status)} ${updatingId === task.id ? 'opacity-50 cursor-wait' : ''}`}
-                                                                        >
-                                                                            <option value="Todo">Todo</option>
-                                                                            <option value="In Progress">In Progress</option>
-                                                                            <option value="Done">Done</option>
-                                                                        </select>
-                                                                        {updatingId === task.id && <span className="ml-2 text-[10px] text-blue-500 animate-pulse">저장..</span>}
-                                                                    </div>
+                                                                    <select 
+                                                                        value={task.status} 
+                                                                        onChange={(e) => updateStatus(task.id, e.target.value)} 
+                                                                        disabled={(!user && !demoMode)}
+                                                                        className={`text-xs font-medium px-2.5 py-1 rounded-full border-0 cursor-pointer outline-none ring-1 ring-inset ${getStatusColor(task.status)} ${(!user && !demoMode) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                                    >
+                                                                        <option value="Todo">Todo</option>
+                                                                        <option value="In Progress">In Progress</option>
+                                                                        <option value="Done">Done</option>
+                                                                    </select>
                                                                 </td>
                                                                 <td className="px-6 py-4 text-xs text-gray-400 truncate">
                                                                     {task.updatedBy ? (
@@ -551,15 +633,13 @@
                                 <div className="overflow-x-auto border rounded-xl bg-white shadow-sm scrollbar-hide">
                                     <div className="min-w-[1200px]">
                                         <div className="flex border-b sticky top-0 bg-gray-50 z-20">
-                                            {/* 간트 차트 Task Name 너비 수정: w-64 (256px) -> w-96 (384px) */}
-                                            <div className="w-96 flex-shrink-0 p-3 text-xs font-bold text-gray-500 uppercase tracking-wider border-r bg-gray-50 sticky left-0 z-30 bg-gray-50 shadow-md">Task Name</div>
+                                            <div className="w-64 flex-shrink-0 p-3 text-xs font-bold text-gray-500 uppercase tracking-wider border-r bg-gray-50 sticky left-0 z-30 bg-gray-50">Task Name</div>
                                             <div className="flex-1 flex">
                                                 {['2025-12', '2026-01', '2026-02', '2026-03'].map(month => <div key={month} className="flex-1 border-r p-2 text-center text-xs font-bold text-gray-600 bg-gray-100">{month}</div>)}
                                             </div>
                                         </div>
                                         <div className="relative">
-                                            {/* 간트 차트 라인 오프셋 수정: ml-64 -> ml-96 */}
-                                            <div className="absolute inset-0 flex ml-96 pointer-events-none">
+                                            <div className="absolute inset-0 flex ml-64 pointer-events-none">
                                                 {['12','01','02','03'].map((_, i) => <div key={i} className="flex-1 border-r border-dashed border-gray-200 h-full"></div>)}
                                             </div>
                                             {filteredTasks.map((task) => {
@@ -569,20 +649,22 @@
 
                                                 const leftPercent = (startOffset / ganttTotal) * 100;
                                                 const widthPercent = (duration / ganttTotal) * 100;
+                                                
+                                                // 간트 차트: Phase 색상 대신 Status 색상 적용 (시각화 강화)
+                                                // 요구사항: 상태별 시각 요소 추가
                                                 const barClass = getGanttBarClass(task.status);
 
                                                 return (
                                                     <div key={task.id} className="flex border-b hover:bg-gray-50 h-10 items-center relative group">
-                                                        {/* 간트 차트 Task Name 셀 너비 수정: w-64 -> w-96 */}
-                                                        <div className="w-96 flex-shrink-0 px-4 text-sm text-gray-700 truncate font-medium border-r bg-white sticky left-0 z-10 flex items-center h-full shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                                        <div className="w-64 flex-shrink-0 px-4 text-sm text-gray-700 truncate font-medium border-r bg-white sticky left-0 z-10 flex items-center h-full shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                                                             <span className={`w-2 h-2 rounded-full mr-2 ${task.status === 'Done' ? 'bg-green-500' : task.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'}`}></span>
                                                             {task.task}
                                                         </div>
                                                         <div className="flex-1 relative h-full flex items-center px-1">
                                                             <div 
-                                                                className={`h-6 rounded-md shadow-sm text-[10px] flex items-center justify-center text-white truncate px-2 transition-all cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-indigo-300 ${barClass}`} 
+                                                                className={`h-6 rounded-md shadow-sm text-[10px] flex items-center justify-center text-white truncate px-2 transition-all ${barClass}`} 
                                                                 style={{ marginLeft: `${leftPercent}%`, width: `${widthPercent}%`, minWidth: '24px' }}
-                                                                title={`${task.task} (${task.status}) - 클릭하여 수정 불가 (리스트 뷰 사용 권장)`}
+                                                                title={`${task.task} (${task.status})`}
                                                             >
                                                                 {widthPercent > 5 && task.assignee?.display}
                                                             </div>
@@ -591,7 +673,7 @@
                                                 );
                                             })}
                                             {filteredTasks.length === 0 && (
-                                                <div className="p-12 text-center text-gray-500 absolute w-full ml-96 top-0">
+                                                <div className="p-12 text-center text-gray-500 absolute w-full ml-64 top-0">
                                                     선택한 조건에 맞는 일정이 없습니다.
                                                 </div>
                                             )}
